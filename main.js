@@ -1,35 +1,51 @@
 const fs = require('fs').promises; // 使用 fs 的 promise API
-const iconv = require('iconv-lite'); // 导入 iconv-lite
+const path = require('path'); // 用于处理文件路径
 
 async function convertShpToGeoJson() {
     try {
-        console.log('开始读取 SHP 文件...');
-        const shpBuffer = await fs.readFile('C:/Users/r/Desktop/dbf_encode/shp/内蒙古自治区.shp');
-        console.log('成功读取 SHP 文件。');
+        const shpFolder = 'C:/Users/r/Desktop/dbf_encode/shp/';
+        const geojsonFolder = 'C:/Users/r/Desktop/dbf_encode/geojson/';
 
-        console.log('开始读取 DBF 文件...');
-        const dbfBuffer = await fs.readFile('C:/Users/r/Desktop/dbf_encode/shp/内蒙古自治区.dbf');
-        console.log('成功读取 DBF 文件。');
+        // 获取 SHP 文件夹中所有的文件
+        const files = await fs.readdir(shpFolder);
 
-        const { default: shp, parseDbf, combine, parseShp } = await import('shpjs'); // 动态导入 shpjs
+        // 筛选出所有的 .shp 文件
+        const shpFiles = files.filter(file => file.endsWith('.shp'));
 
-        console.log('开始解析 DBF 文件...');
-        const s1 = parseDbf(dbfBuffer, 'GBK');
-        console.log('成功解析 DBF 文件。');
+        // 循环处理每一个 .shp 文件
+        for (const shpFile of shpFiles) {
+            const shpFilePath = path.join(shpFolder, shpFile);
+            const dbfFilePath = shpFilePath.replace('.shp', '.dbf'); // DBF 文件路径与 SHP 文件相同，只是扩展名不同
+            const geojsonFileName = shpFile.replace('.shp', '.geojson'); // GeoJSON 文件名
+            const geojsonFilePath = path.join(geojsonFolder, geojsonFileName);
 
-        // 转换为 GeoJSON
-        const geojson = combine([
-            parseShp(shpBuffer),
-            s1
-        ]);
+            // 读取 SHP 和 DBF 文件
+            const shpBuffer = await fs.readFile(shpFilePath);
+            const dbfBuffer = await fs.readFile(dbfFilePath);
 
-        console.log('GeoJSON 生成成功:', geojson);
+            const {parseDbf, combine, parseShp} = await import('shpjs'); // 动态导入 shpjs
 
-        // 保存 GeoJSON 到文件
-        const geojsonString = JSON.stringify(geojson, null, 2); // 格式化为 JSON 字符串
-        await fs.writeFile('C:/Users/r/Desktop/dbf_encode/shp/内蒙古自治区.geojson', geojsonString, 'utf-8');
-        console.log('GeoJSON 已成功保存到文件。');
+            console.log(`开始解析 SHP 文件：${shpFile}`);
 
+            // 解析 DBF 文件
+            const dbfData = parseDbf(dbfBuffer, 'GBK');
+
+            // 转换为 GeoJSON
+            const geojson = combine([
+                parseShp(shpBuffer),
+                dbfData
+            ]);
+
+            // 格式化为 JSON 字符串
+            const geojsonString = JSON.stringify(geojson, null, 2);
+
+            // 保存 GeoJSON 文件
+            await fs.writeFile(geojsonFilePath, geojsonString, 'utf-8');
+            console.log(`GeoJSON 已成功保存：${geojsonFileName}`);
+        }
+
+        console.log('所有 SHP 文件转换为 GeoJSON 完成！');
+        
     } catch (error) {
         console.error('Error reading files or converting to GeoJSON:', error);
     }
